@@ -119,7 +119,7 @@ class TodoApp {
     }
 
     attachEventListeners() {
-        const { todoInput, addBtn, filterBtns, clearBtn, dueDateInput } = this.elements;
+        const { todoInput, addBtn, filterBtns, clearBtn, dueDateInput, todoList } = this.elements;
 
         // Add todo
         addBtn.addEventListener('click', () => this.handleAddTodo());
@@ -138,6 +138,23 @@ class TodoApp {
         // Set min date to today
         const today = new Date().toISOString().split('T')[0];
         dueDateInput.min = today;
+
+        // Todo list interactions (using event delegation)
+        todoList.addEventListener('change', (e) => {
+            if (e.target.classList.contains('todo-checkbox')) {
+                const id = parseInt(e.target.dataset.id);
+                this.handleToggleTodo(id);
+            }
+        });
+
+        todoList.addEventListener('click', (e) => {
+            if (e.target.classList.contains('delete-btn') ||
+                e.target.closest('.delete-btn')) {
+                const btn = e.target.closest('.delete-btn');
+                const id = parseInt(btn.dataset.id);
+                this.handleDeleteTodo(id);
+            }
+        });
     }
 
     preventIOSBounce() {
@@ -296,7 +313,6 @@ class TodoApp {
         }
 
         this.updateStats();
-        this.attachTodoListeners();
     }
 
     renderTodoItem(todo) {
@@ -309,7 +325,6 @@ class TodoApp {
                     <input type="checkbox"
                            class="todo-checkbox"
                            ${todo.completed ? 'checked' : ''}
-                           data-action="toggle"
                            data-id="${todo.id}">
                     <div class="checkbox-custom"></div>
                 </div>
@@ -325,7 +340,6 @@ class TodoApp {
                     </div>
                 </div>
                 <button class="delete-btn"
-                        data-action="delete"
                         data-id="${todo.id}"
                         aria-label="Delete task">
                     ×
@@ -349,20 +363,6 @@ class TodoApp {
                 <small>${msg.sub}</small>
             </div>
         `;
-    }
-
-    attachTodoListeners() {
-        this.elements.todoList.addEventListener('click', (e) => {
-            const target = e.target;
-            const action = target.dataset.action;
-            const id = parseInt(target.dataset.id);
-
-            if (action === 'toggle') {
-                this.handleToggleTodo(id);
-            } else if (action === 'delete') {
-                this.handleDeleteTodo(id);
-            }
-        });
     }
 
     updateStats() {
