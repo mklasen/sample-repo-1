@@ -1,11 +1,11 @@
 {
-  "name": "Todo App",
+  "name": "Todo",
   "short_name": "Todo",
-  "description": "A modern todo app with LocalStorage and IndexedDB support",
+  "description": "A minimal iOS-style todo app with due dates and offline support",
   "start_url": "./index.html",
   "display": "standalone",
-  "background_color": "#667eea",
-  "theme_color": "#667eea",
+  "background_color": "#F2F2F7",
+  "theme_color": "#F2F2F7",
   "orientation": "portrait-primary",
   "icons": [
     {

@@ -2,15 +2,15 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Todo App</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, user-scalable=no">
+    <title>Todo</title>
 
     <!-- PWA Meta Tags -->
-    <meta name="description" content="A modern todo app with LocalStorage and IndexedDB support">
-    <meta name="theme-color" content="#667eea">
+    <meta name="description" content="A minimal iOS-style todo app with IndexedDB">
+    <meta name="theme-color" content="#F2F2F7">
     <meta name="apple-mobile-web-app-capable" content="yes">
-    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-    <meta name="apple-mobile-web-app-title" content="Todo App">
+    <meta name="apple-mobile-web-app-status-bar-style" content="default">
+    <meta name="apple-mobile-web-app-title" content="Todo">
 
     <!-- Icons -->
     <link rel="icon" type="image/svg+xml" href="favicon.svg">
@@ -21,40 +21,46 @@
     <link rel="stylesheet" href="style.css">
 </head>
 <body>
-    <div class="container">
+    <div class="app-container">
         <header>
-            <h1>Todo App</h1>
-            <div class="storage-toggle">
-                <label>
-                    <input type="radio" name="storage" value="localStorage" checked>
-                    <span>LocalStorage</span>
-                </label>
-                <label>
-                    <input type="radio" name="storage" value="indexedDB">
-                    <span>IndexedDB</span>
-                </label>
-            </div>
+            <h1>Todo</h1>
+            <div class="subtitle">Your tasks, organized</div>
         </header>
 
-        <div class="add-todo">
-            <input type="text" id="todoInput" placeholder="Add a new todo..." />
-            <button id="addBtn">Add</button>
+        <div class="add-section">
+            <div class="input-group">
+                <div class="input-row">
+                    <svg class="input-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/>
+                    </svg>
+                    <input type="text" id="todoInput" placeholder="New task" autocomplete="off">
+                </div>
+                <div class="input-row">
+                    <svg class="input-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/>
+                    </svg>
+                    <input type="date" id="dueDateInput">
+                </div>
+            </div>
+            <button class="add-btn" id="addBtn">Add Task</button>
         </div>
 
         <div class="filters">
             <button class="filter-btn active" data-filter="all">All</button>
             <button class="filter-btn" data-filter="active">Active</button>
-            <button class="filter-btn" data-filter="completed">Completed</button>
+            <button class="filter-btn" data-filter="completed">Done</button>
         </div>
 
-        <ul id="todoList" class="todo-list"></ul>
+        <div class="list-container">
+            <ul id="todoList" class="todo-list"></ul>
+        </div>
 
         <div class="stats">
-            <span id="stats"></span>
-            <button id="clearCompleted">Clear Completed</button>
+            <span id="stats">0 tasks</span>
+            <button class="clear-btn" id="clearCompleted">Clear Done</button>
         </div>
     </div>
 
-    <script src="app.js"></script>
+    <script src="app.js" type="module"></script>
 </body>
 </html>

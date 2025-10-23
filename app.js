@@ -1,216 +1,418 @@
-// Todo App with LocalStorage and IndexedDB support
+// Modern Todo App with IndexedDB - AGI Level Implementation
+// Using ES2024+ features and best practices
 
-class TodoApp {
-    constructor() {
-        this.todos = [];
-        this.currentFilter = 'all';
-        this.storageType = 'localStorage';
+class DatabaseManager {
+    constructor(dbName = 'TodoAppDB', version = 1) {
+        this.dbName = dbName;
+        this.version = version;
         this.db = null;
-
-        this.initElements();
-        this.initIndexedDB();
-        this.attachEventListeners();
-        this.loadTodos();
     }
 
-    initElements() {
-        this.todoInput = document.getElementById('todoInput');
-        this.addBtn = document.getElementById('addBtn');
-        this.todoList = document.getElementById('todoList');
-        this.filterBtns = document.querySelectorAll('.filter-btn');
-        this.clearCompletedBtn = document.getElementById('clearCompleted');
-        this.statsEl = document.getElementById('stats');
-        this.storageRadios = document.querySelectorAll('input[name="storage"]');
-    }
-
-    initIndexedDB() {
-        const request = indexedDB.open('TodoDB', 1);
-
-        request.onerror = () => {
-            console.error('IndexedDB failed to open');
-        };
-
-        request.onsuccess = (event) => {
-            this.db = event.target.result;
-            console.log('IndexedDB opened successfully');
-        };
-
-        request.onupgradeneeded = (event) => {
-            const db = event.target.result;
-            if (!db.objectStoreNames.contains('todos')) {
-                const objectStore = db.createObjectStore('todos', { keyPath: 'id' });
-                objectStore.createIndex('completed', 'completed', { unique: false });
-            }
-        };
-    }
-
-    attachEventListeners() {
-        this.addBtn.addEventListener('click', () => this.addTodo());
-        this.todoInput.addEventListener('keypress', (e) => {
-            if (e.key === 'Enter') this.addTodo();
-        });
-
-        this.filterBtns.forEach(btn => {
-            btn.addEventListener('click', (e) => {
-                this.currentFilter = e.target.dataset.filter;
-                this.filterBtns.forEach(b => b.classList.remove('active'));
-                e.target.classList.add('active');
-                this.renderTodos();
-            });
-        });
-
-        this.clearCompletedBtn.addEventListener('click', () => this.clearCompleted());
-
-        this.storageRadios.forEach(radio => {
-            radio.addEventListener('change', (e) => {
-                this.storageType = e.target.value;
-                this.loadTodos();
-            });
-        });
-    }
-
-    async addTodo() {
-        const text = this.todoInput.value.trim();
-        if (!text) return;
-
-        const todo = {
-            id: Date.now(),
-            text: text,
-            completed: false,
-            createdAt: new Date().toISOString()
-        };
-
-        this.todos.push(todo);
-        await this.saveTodos();
-        this.todoInput.value = '';
-        this.renderTodos();
-    }
-
-    async toggleTodo(id) {
-        const todo = this.todos.find(t => t.id === id);
-        if (todo) {
-            todo.completed = !todo.completed;
-            await this.saveTodos();
-            this.renderTodos();
-        }
-    }
-
-    async deleteTodo(id) {
-        this.todos = this.todos.filter(t => t.id !== id);
-        await this.saveTodos();
-        this.renderTodos();
-    }
-
-    async clearCompleted() {
-        this.todos = this.todos.filter(t => !t.completed);
-        await this.saveTodos();
-        this.renderTodos();
-    }
-
-    async saveTodos() {
-        if (this.storageType === 'localStorage') {
-            localStorage.setItem('todos', JSON.stringify(this.todos));
-        } else {
-            await this.saveToIndexedDB();
-        }
-    }
-
-    async loadTodos() {
-        if (this.storageType === 'localStorage') {
-            const stored = localStorage.getItem('todos');
-            this.todos = stored ? JSON.parse(stored) : [];
-        } else {
-            await this.loadFromIndexedDB();
-        }
-        this.renderTodos();
-    }
-
-    async saveToIndexedDB() {
-        if (!this.db) {
-            console.error('IndexedDB not initialized');
-            return;
-        }
-
+    async init() {
         return new Promise((resolve, reject) => {
-            const transaction = this.db.transaction(['todos'], 'readwrite');
-            const objectStore = transaction.objectStore('todos');
+            const request = indexedDB.open(this.dbName, this.version);
 
-            // Clear existing todos
-            objectStore.clear();
-
-            // Add all current todos
-            this.todos.forEach(todo => {
-                objectStore.add(todo);
-            });
-
-            transaction.oncomplete = () => resolve();
-            transaction.onerror = () => reject(transaction.error);
-        });
-    }
-
-    async loadFromIndexedDB() {
-        if (!this.db) {
-            // Wait for DB to initialize
-            await new Promise(resolve => setTimeout(resolve, 100));
-            if (!this.db) {
-                console.error('IndexedDB not initialized');
-                this.todos = [];
-                return;
-            }
-        }
-
-        return new Promise((resolve, reject) => {
-            const transaction = this.db.transaction(['todos'], 'readonly');
-            const objectStore = transaction.objectStore('todos');
-            const request = objectStore.getAll();
-
+            request.onerror = () => reject(request.error);
             request.onsuccess = () => {
-                this.todos = request.result;
-                resolve();
+                this.db = request.result;
+                resolve(this.db);
             };
 
+            request.onupgradeneeded = (event) => {
+                const db = event.target.result;
+
+                if (!db.objectStoreNames.contains('todos')) {
+                    const store = db.createObjectStore('todos', { keyPath: 'id' });
+                    store.createIndex('completed', 'completed', { unique: false });
+                    store.createIndex('dueDate', 'dueDate', { unique: false });
+                    store.createIndex('createdAt', 'createdAt', { unique: false });
+                }
+            };
+        });
+    }
+
+    async getAll() {
+        const tx = this.db.transaction('todos', 'readonly');
+        const store = tx.objectStore('todos');
+        return new Promise((resolve, reject) => {
+            const request = store.getAll();
+            request.onsuccess = () => resolve(request.result);
             request.onerror = () => reject(request.error);
         });
     }
 
-    getFilteredTodos() {
-        switch (this.currentFilter) {
-            case 'active':
-                return this.todos.filter(t => !t.completed);
-            case 'completed':
-                return this.todos.filter(t => t.completed);
-            default:
-                return this.todos;
+    async add(todo) {
+        const tx = this.db.transaction('todos', 'readwrite');
+        const store = tx.objectStore('todos');
+        return new Promise((resolve, reject) => {
+            const request = store.add(todo);
+            request.onsuccess = () => resolve(request.result);
+            request.onerror = () => reject(request.error);
+        });
+    }
+
+    async update(todo) {
+        const tx = this.db.transaction('todos', 'readwrite');
+        const store = tx.objectStore('todos');
+        return new Promise((resolve, reject) => {
+            const request = store.put(todo);
+            request.onsuccess = () => resolve(request.result);
+            request.onerror = () => reject(request.error);
+        });
+    }
+
+    async delete(id) {
+        const tx = this.db.transaction('todos', 'readwrite');
+        const store = tx.objectStore('todos');
+        return new Promise((resolve, reject) => {
+            const request = store.delete(id);
+            request.onsuccess = () => resolve();
+            request.onerror = () => reject(request.error);
+        });
+    }
+
+    async deleteMultiple(ids) {
+        const tx = this.db.transaction('todos', 'readwrite');
+        const store = tx.objectStore('todos');
+        const promises = ids.map(id =>
+            new Promise((resolve, reject) => {
+                const request = store.delete(id);
+                request.onsuccess = () => resolve();
+                request.onerror = () => reject(request.error);
+            })
+        );
+        return Promise.all(promises);
+    }
+}
+
+class TodoApp {
+    constructor() {
+        this.db = new DatabaseManager();
+        this.todos = [];
+        this.currentFilter = 'all';
+        this.elements = this.cacheElements();
+        this.init();
+    }
+
+    cacheElements() {
+        return {
+            todoInput: document.getElementById('todoInput'),
+            dueDateInput: document.getElementById('dueDateInput'),
+            addBtn: document.getElementById('addBtn'),
+            todoList: document.getElementById('todoList'),
+            filterBtns: document.querySelectorAll('.filter-btn'),
+            clearBtn: document.getElementById('clearCompleted'),
+            stats: document.getElementById('stats')
+        };
+    }
+
+    async init() {
+        try {
+            await this.db.init();
+            await this.loadTodos();
+            this.attachEventListeners();
+            this.preventIOSBounce();
+        } catch (error) {
+            console.error('Failed to initialize app:', error);
+            this.showError('Failed to initialize. Please refresh.');
         }
     }
 
-    renderTodos() {
-        const filteredTodos = this.getFilteredTodos();
+    attachEventListeners() {
+        const { todoInput, addBtn, filterBtns, clearBtn, dueDateInput } = this.elements;
 
-        if (filteredTodos.length === 0) {
-            this.todoList.innerHTML = '<div class="empty-state"><p>No todos to display</p></div>';
+        // Add todo
+        addBtn.addEventListener('click', () => this.handleAddTodo());
+        todoInput.addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') this.handleAddTodo();
+        });
+
+        // Filter todos
+        filterBtns.forEach(btn => {
+            btn.addEventListener('click', (e) => this.handleFilterChange(e.target));
+        });
+
+        // Clear completed
+        clearBtn.addEventListener('click', () => this.handleClearCompleted());
+
+        // Set min date to today
+        const today = new Date().toISOString().split('T')[0];
+        dueDateInput.min = today;
+    }
+
+    preventIOSBounce() {
+        // Prevent pull-to-refresh and overscroll on iOS
+        let lastTouchY = 0;
+        const listContainer = document.querySelector('.list-container');
+
+        document.body.addEventListener('touchstart', (e) => {
+            lastTouchY = e.touches[0].clientY;
+        }, { passive: false });
+
+        document.body.addEventListener('touchmove', (e) => {
+            const touchY = e.touches[0].clientY;
+            const touchYDelta = touchY - lastTouchY;
+            lastTouchY = touchY;
+
+            // Prevent pull-to-refresh
+            if (!listContainer.contains(e.target) && touchYDelta > 0) {
+                e.preventDefault();
+            }
+        }, { passive: false });
+    }
+
+    async handleAddTodo() {
+        const { todoInput, dueDateInput } = this.elements;
+        const text = todoInput.value.trim();
+
+        if (!text) {
+            this.shake(todoInput);
+            return;
+        }
+
+        const todo = {
+            id: Date.now(),
+            text,
+            completed: false,
+            createdAt: new Date().toISOString(),
+            dueDate: dueDateInput.value || null
+        };
+
+        try {
+            await this.db.add(todo);
+            this.todos.push(todo);
+            this.render();
+
+            // Clear inputs with animation
+            todoInput.value = '';
+            dueDateInput.value = '';
+            this.flash(this.elements.addBtn);
+        } catch (error) {
+            console.error('Failed to add todo:', error);
+            this.showError('Failed to add task');
+        }
+    }
+
+    async handleToggleTodo(id) {
+        const todo = this.todos.find(t => t.id === id);
+        if (!todo) return;
+
+        todo.completed = !todo.completed;
+
+        try {
+            await this.db.update(todo);
+            this.render();
+        } catch (error) {
+            console.error('Failed to update todo:', error);
+            todo.completed = !todo.completed; // Rollback
+            this.showError('Failed to update task');
+        }
+    }
+
+    async handleDeleteTodo(id) {
+        const element = document.querySelector(`[data-id="${id}"]`);
+        element?.classList.add('deleting');
+
+        await new Promise(resolve => setTimeout(resolve, 300));
+
+        try {
+            await this.db.delete(id);
+            this.todos = this.todos.filter(t => t.id !== id);
+            this.render();
+        } catch (error) {
+            console.error('Failed to delete todo:', error);
+            element?.classList.remove('deleting');
+            this.showError('Failed to delete task');
+        }
+    }
+
+    handleFilterChange(button) {
+        this.elements.filterBtns.forEach(btn => btn.classList.remove('active'));
+        button.classList.add('active');
+        this.currentFilter = button.dataset.filter;
+        this.render();
+    }
+
+    async handleClearCompleted() {
+        const completedIds = this.todos
+            .filter(t => t.completed)
+            .map(t => t.id);
+
+        if (completedIds.length === 0) return;
+
+        // Animate out
+        completedIds.forEach(id => {
+            const element = document.querySelector(`[data-id="${id}"]`);
+            element?.classList.add('deleting');
+        });
+
+        await new Promise(resolve => setTimeout(resolve, 300));
+
+        try {
+            await this.db.deleteMultiple(completedIds);
+            this.todos = this.todos.filter(t => !t.completed);
+            this.render();
+        } catch (error) {
+            console.error('Failed to clear completed:', error);
+            this.showError('Failed to clear tasks');
+        }
+    }
+
+    async loadTodos() {
+        try {
+            this.todos = await this.db.getAll();
+            this.render();
+        } catch (error) {
+            console.error('Failed to load todos:', error);
+            this.showError('Failed to load tasks');
+        }
+    }
+
+    getFilteredTodos() {
+        const filtered = {
+            all: this.todos,
+            active: this.todos.filter(t => !t.completed),
+            completed: this.todos.filter(t => t.completed)
+        }[this.currentFilter];
+
+        // Sort: active first, then by due date, then by creation date
+        return filtered.sort((a, b) => {
+            if (a.completed !== b.completed) return a.completed ? 1 : -1;
+            if (a.dueDate && b.dueDate) return new Date(a.dueDate) - new Date(b.dueDate);
+            if (a.dueDate) return -1;
+            if (b.dueDate) return 1;
+            return new Date(b.createdAt) - new Date(a.createdAt);
+        });
+    }
+
+    render() {
+        const filtered = this.getFilteredTodos();
+        const { todoList } = this.elements;
+
+        if (filtered.length === 0) {
+            todoList.innerHTML = this.renderEmptyState();
         } else {
-            this.todoList.innerHTML = filteredTodos.map(todo => `
-                <li class="todo-item ${todo.completed ? 'completed' : ''}" data-id="${todo.id}">
-                    <input type="checkbox" class="todo-checkbox" ${todo.completed ? 'checked' : ''}
-                           onchange="app.toggleTodo(${todo.id})">
-                    <span class="todo-text">${this.escapeHtml(todo.text)}</span>
-                    <span class="todo-date">${this.formatDate(todo.createdAt)}</span>
-                    <button class="delete-btn" onclick="app.deleteTodo(${todo.id})">Delete</button>
-                </li>
-            `).join('');
+            todoList.innerHTML = filtered.map(todo => this.renderTodoItem(todo)).join('');
         }
 
         this.updateStats();
+        this.attachTodoListeners();
+    }
+
+    renderTodoItem(todo) {
+        const dueInfo = this.getDueDateInfo(todo.dueDate);
+        const overdueClass = dueInfo.isOverdue && !todo.completed ? 'overdue' : '';
+
+        return `
+            <li class="todo-item ${todo.completed ? 'completed' : ''}" data-id="${todo.id}">
+                <div class="todo-checkbox-wrapper">
+                    <input type="checkbox"
+                           class="todo-checkbox"
+                           ${todo.completed ? 'checked' : ''}
+                           data-action="toggle"
+                           data-id="${todo.id}">
+                    <div class="checkbox-custom"></div>
+                </div>
+                <div class="todo-content">
+                    <div class="todo-text">${this.escapeHtml(todo.text)}</div>
+                    <div class="todo-meta">
+                        ${dueInfo.text ? `
+                            <span class="todo-date ${overdueClass}">
+                                ${dueInfo.icon} ${dueInfo.text}
+                            </span>
+                        ` : ''}
+                        <span class="todo-created">${this.formatRelativeTime(todo.createdAt)}</span>
+                    </div>
+                </div>
+                <button class="delete-btn"
+                        data-action="delete"
+                        data-id="${todo.id}"
+                        aria-label="Delete task">
+                    ×
+                </button>
+            </li>
+        `;
+    }
+
+    renderEmptyState() {
+        const messages = {
+            all: { icon: '📋', text: 'No tasks yet', sub: 'Add your first task above' },
+            active: { icon: '✨', text: 'All done!', sub: 'No active tasks' },
+            completed: { icon: '🎯', text: 'No completed tasks', sub: 'Complete some tasks to see them here' }
+        };
+
+        const msg = messages[this.currentFilter];
+        return `
+            <div class="empty-state">
+                <div class="empty-icon">${msg.icon}</div>
+                <p>${msg.text}</p>
+                <small>${msg.sub}</small>
+            </div>
+        `;
+    }
+
+    attachTodoListeners() {
+        this.elements.todoList.addEventListener('click', (e) => {
+            const target = e.target;
+            const action = target.dataset.action;
+            const id = parseInt(target.dataset.id);
+
+            if (action === 'toggle') {
+                this.handleToggleTodo(id);
+            } else if (action === 'delete') {
+                this.handleDeleteTodo(id);
+            }
+        });
     }
 
     updateStats() {
+        const { stats, clearBtn } = this.elements;
         const activeCount = this.todos.filter(t => !t.completed).length;
         const completedCount = this.todos.filter(t => t.completed).length;
-        this.statsEl.textContent = `${activeCount} active, ${completedCount} completed`;
+        const total = this.todos.length;
+
+        stats.textContent = total === 0
+            ? 'No tasks'
+            : `${activeCount} active • ${completedCount} done`;
+
+        clearBtn.disabled = completedCount === 0;
     }
 
-    formatDate(dateString) {
+    getDueDateInfo(dueDate) {
+        if (!dueDate) return { text: null, icon: '', isOverdue: false };
+
+        const due = new Date(dueDate);
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+        due.setHours(0, 0, 0, 0);
+
+        const diffTime = due - today;
+        const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+
+        const isOverdue = diffDays < 0;
+        let text, icon;
+
+        if (diffDays === 0) {
+            icon = '📅';
+            text = 'Today';
+        } else if (diffDays === 1) {
+            icon = '📅';
+            text = 'Tomorrow';
+        } else if (diffDays < 0) {
+            icon = '⚠️';
+            text = `${Math.abs(diffDays)} days overdue`;
+        } else if (diffDays <= 7) {
+            icon = '📅';
+            text = `In ${diffDays} days`;
+        } else {
+            icon = '📅';
+            text = due.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+        }
+
+        return { text, icon, isOverdue };
+    }
+
+    formatRelativeTime(dateString) {
         const date = new Date(dateString);
         const now = new Date();
         const diffMs = now - date;
@@ -223,7 +425,7 @@ class TodoApp {
         if (diffHours < 24) return `${diffHours}h ago`;
         if (diffDays < 7) return `${diffDays}d ago`;
 
-        return date.toLocaleDateString();
+        return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
     }
 
     escapeHtml(text) {
@@ -231,47 +433,52 @@ class TodoApp {
         div.textContent = text;
         return div.innerHTML;
     }
+
+    // UI Feedback animations
+    shake(element) {
+        element.style.animation = 'none';
+        setTimeout(() => {
+            element.style.animation = 'shake 0.5s';
+        }, 10);
+    }
+
+    flash(element) {
+        const originalBg = element.style.background;
+        element.style.background = '#34C759';
+        setTimeout(() => {
+            element.style.background = originalBg;
+        }, 200);
+    }
+
+    showError(message) {
+        // Simple error feedback - could be enhanced with toast notifications
+        console.error(message);
+    }
 }
 
-// Initialize the app
-let app;
-if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', () => {
-        app = new TodoApp();
-    });
-} else {
-    app = new TodoApp();
-}
-
-// Register Service Worker for PWA support
+// Service Worker Registration
 if ('serviceWorker' in navigator) {
-    window.addEventListener('load', () => {
-        navigator.serviceWorker.register('./sw.js')
-            .then((registration) => {
-                console.log('Service Worker registered successfully:', registration.scope);
+    window.addEventListener('load', async () => {
+        try {
+            const registration = await navigator.serviceWorker.register('./sw.js');
+            console.log('SW registered:', registration.scope);
 
-                // Check for updates
-                registration.addEventListener('updatefound', () => {
-                    const newWorker = registration.installing;
-                    console.log('New service worker found, installing...');
-
-                    newWorker.addEventListener('statechange', () => {
-                        if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
-                            // New service worker available, prompt user to refresh
-                            if (confirm('New version available! Reload to update?')) {
-                                newWorker.postMessage({ type: 'SKIP_WAITING' });
-                                window.location.reload();
-                            }
+            registration.addEventListener('updatefound', () => {
+                const newWorker = registration.installing;
+                newWorker?.addEventListener('statechange', () => {
+                    if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
+                        if (confirm('New version available! Reload to update?')) {
+                            newWorker.postMessage({ type: 'SKIP_WAITING' });
+                            window.location.reload();
                         }
-                    });
+                    }
                 });
-            })
-            .catch((error) => {
-                console.log('Service Worker registration failed:', error);
             });
+        } catch (error) {
+            console.error('SW registration failed:', error);
+        }
     });
 
-    // Reload page when new service worker takes control
     let refreshing = false;
     navigator.serviceWorker.addEventListener('controllerchange', () => {
         if (!refreshing) {
@@ -280,3 +487,17 @@ if ('serviceWorker' in navigator) {
         }
     });
 }
+
+// Initialize app
+const app = new TodoApp();
+
+// Add shake animation to CSS dynamically
+const style = document.createElement('style');
+style.textContent = `
+    @keyframes shake {
+        0%, 100% { transform: translateX(0); }
+        25% { transform: translateX(-10px); }
+        75% { transform: translateX(10px); }
+    }
+`;
+document.head.appendChild(style);
